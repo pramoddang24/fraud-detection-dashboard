@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive UI Demo: Real-time Fraud Detection</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- Chart.js CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Socket.IO Client -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.5/socket.io.js"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background: linear-gradient(135deg, #111827 0%, #374151 100%);
+            background-attachment: fixed;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            padding: 1rem;
+        }
+        .card {
+            background-color: rgba(28, 37, 51, 0.92);
+            backdrop-filter: blur(15px);
+            border-radius: 1.5rem;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.2), 0 10px 10px -5px rgba(0, 0, 0, 0.1);
+            width: 100%;
+            max-width: 64rem; /* 1024px */
+        }
+        .text-gradient {
+            background: linear-gradient(90deg, #a78bfa, #f472b6);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .fade-in {
+            animation: fadeIn 0.8s ease-in-out;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+    </style>
+</head>
+<body class="text-gray-200">
+
+    <div class="card p-6 sm:p-8 md:p-12 fade-in">
+        <div id="slide-8">
+            <h2 class="text-3xl sm:text-4xl font-bold mb-6 text-center text-gradient">Interactive UI Demo (Simulation)</h2>
+            <div class="bg-gray-900/80 p-4 rounded-xl shadow-2xl border-2 border-gray-700">
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                    <div class="lg:col-span-1 space-y-4">
+                        <div class="bg-gray-800/80 p-4 rounded-lg h-64 overflow-y-auto ring-1 ring-gray-700">
+                            <h3 class="text-teal-300 font-bold mb-2">Real-time Transaction Feed</h3>
+                            <div id="transaction-feed" class="text-sm space-y-2"></div>
+                        </div>
+                        <div class="bg-gray-800/80 p-4 rounded-lg h-64 overflow-y-auto ring-1 ring-gray-700">
+                            <h3 class="text-red-400 font-bold mb-2">Fraud Alerts Dashboard</h3>
+                            <div id="alert-feed" class="text-sm space-y-2"></div>
+                        </div>
+                    </div>
+                    <div class="lg:col-span-2 space-y-4">
+                        <div class="bg-gray-800/80 p-4 rounded-lg ring-1 ring-gray-700">
+                            <h3 class="text-white font-bold mb-2 text-center">Cumulative Regret (Thompson Sampling vs. UCB1)</h3>
+                            <canvas id="regretChart"></canvas>
+                        </div>
+                        <div class="bg-gray-800/80 p-4 rounded-lg ring-1 ring-gray-700">
+                            <h3 class="text-white font-bold mb-2 text-center">Live Cluster Distribution (GMM)</h3>
+                            <canvas id="clusterChart" style="max-height: 200px;"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Alert Modal (replaces native alert()) -->
+    <div id="alert-modal" class="fixed inset-0 z-50 flex items-center justify-center hidden">
+        <div class="absolute inset-0 bg-black opacity-50"></div>
+        <div class="bg-gray-800 rounded-lg shadow-lg p-6 z-10 max-w-sm w-full mx-4">
+            <div class="flex justify-between items-center mb-4">
+                <h3 class="text-xl font-bold text-red-500">Fraud Alert!</h3>
+                <button id="close-modal" class="text-gray-400 hover:text-gray-200">&times;</button>
+            </div>
+            <p id="alert-message" class="text-gray-300"></p>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            if (typeof WebSocket === 'undefined') {
+                const alertModal = document.getElementById('alert-modal');
+                const alertMessage = document.getElementById('alert-message');
+                alertMessage.textContent = "WebSockets are not supported in this browser. Please use a modern browser.";
+                alertModal.classList.remove('hidden');
+            } else {
+                const socket = io();
+
+                const transactionFeed = document.getElementById('transaction-feed');
+                const alertFeed = document.getElementById('alert-feed');
+
+                let regretChart, clusterChart;
+                let step = 0;
+
+                function createCharts() {
+                    Chart.defaults.color = '#9ca3af';
+                    Chart.defaults.font.family = "'Inter', sans-serif";
+
+                    const regretCtx = document.getElementById('regretChart').getContext('2d');
+                    regretChart = new Chart(regretCtx, {
+                        type: 'line',
+                        data: {
+                            labels: [],
+                            datasets: [{
+                                label: 'Thompson Sampling',
+                                data: [],
+                                borderColor: '#ec4899',
+                                backgroundColor: 'rgba(236, 72, 153, 0.1)',
+                                borderWidth: 2,
+                                tension: 0.4,
+                                pointRadius: 0,
+                                fill: true
+                            }, {
+                                label: 'UCB1',
+                                data: [],
+                                borderColor: '#60a5fa',
+                                backgroundColor: 'rgba(96, 165, 250, 0.1)',
+                                borderWidth: 2,
+                                tension: 0.4,
+                                pointRadius: 0,
+                                fill: true
+                            }]
+                        },
+                        options: {
+                            scales: {
+                                y: { beginAtZero: true, grid: { color: 'rgba(255,255,255,0.1)' }, title: { display: true, text: 'Cumulative Regret' } },
+                                x: { grid: { color: 'rgba(255,255,255,0.1)' }, title: { display: true, text: 'Steps' } }
+                            },
+                            plugins: {
+                                legend: { labels: { color: '#d1d5db' } }
+                            }
+                        }
+                    });
+
+                    const clusterCtx = document.getElementById('clusterChart').getContext('2d');
+                    clusterChart = new Chart(clusterCtx, {
+                        type: 'doughnut',
+                        data: {
+                            labels: ['Cluster 1 (Low Risk)', 'Cluster 2 (Med Risk)', 'Cluster 3 (High Risk)', 'Cluster 4 (Anomalies)'],
+                            datasets: [{
+                                data: [],
+                                backgroundColor: ['#3b82f6', '#14b8a6', '#f59e0b', '#ef4444'],
+                                borderColor: '#1f2937',
+                                borderWidth: 2,
+                                hoverOffset: 8
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: {
+                                legend: { position: 'right', labels: { color: '#d1d5db' } }
+                            }
+                        }
+                    });
+                }
+
+                createCharts();
+
+                socket.on('connect', function() {
+                    console.log('Connected to WebSocket server');
+                });
+
+                socket.on('disconnect', function() {
+                    console.log('Disconnected from WebSocket server');
+                });
+
+                socket.on('streaming_data', function(data) {
+                    console.log('Received data:', data);
+
+                    const transaction = data.transaction;
+                    const prediction = data.prediction;
+                    const mabs = data.mab_performance;
+                    const clusterCounts = data.cluster_distribution;
+                    step++;
+
+                    const isFraud = prediction.is_fraud;
+                    const statusClass = isFraud ? 'text-red-400 font-bold' : 'text-green-400';
+                    const statusText = isFraud ? 'FLAGGED' : 'OK';
+
+                    const transactionItem = document.createElement('div');
+                    transactionItem.className = 'py-1 border-b border-gray-700';
+                    transactionItem.innerHTML = `
+                        <p class="text-gray-400">
+                            <span class="font-mono text-gray-500">${transaction.timestamp}</span> -
+                            <span class="text-teal-300 font-mono">$${transaction.amount.toFixed(2)}</span> -
+                            <span class="${statusClass}">${statusText}</span>
+                        </p>
+                    `;
+                    transactionFeed.prepend(transactionItem);
+
+                    if (transactionFeed.childElementCount > 50) {
+                        transactionFeed.removeChild(transactionFeed.lastChild);
+                    }
+
+                    if (isFraud) {
+                        const alertItem = document.createElement('div');
+                        alertItem.className = 'py-1 border-b border-red-700 animate-pulse';
+                        alertItem.innerHTML = `
+                            <p class="text-red-400 font-bold">
+                                <span class="font-mono">${transaction.timestamp}</span> - High-Risk Txn -
+                                <span>$${transaction.amount.toFixed(2)} in Cluster ${prediction.cluster_id}</span>
+                            </p>
+                            <p class="text-xs text-gray-400">Model: ${prediction.model_name}, Prob: ${prediction.probability.toFixed(4)}</p>
+                        `;
+                        alertFeed.prepend(alertItem);
+
+                        if (alertFeed.childElementCount > 50) {
+                            alertFeed.removeChild(alertFeed.lastChild);
+                        }
+                    }
+
+                    regretChart.data.labels.push(step);
+                    regretChart.data.datasets[0].data.push(mabs.ts_regret);
+                    regretChart.data.datasets[1].data.push(mabs.ucb_regret);
+                    regretChart.update('none');
+
+                    clusterChart.data.datasets[0].data = Object.values(clusterCounts);
+                    clusterChart.update('none');
+                });
+            }
+        });
+    </script>
+</body>
+</html>
