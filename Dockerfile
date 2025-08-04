@@ -22,5 +22,5 @@ COPY . .
 
 EXPOSE 8000
 
-# Launch the app with Gunicorn
-CMD ["gunicorn", "backend.app:app", "--worker-class", "geventwebsocket.gunicorn.workers.GeventWebSocketWorker", "--bind", "0.0.0.0:8000"]
+# Launch the app with Gunicorn, using $PORT if provided (default to 8000)
+CMD ["sh", "-c", "gunicorn backend.app:app --worker-class geventwebsocket.gunicorn.workers.GeventWebSocketWorker --bind 0.0.0.0:${PORT:-8000}"]
