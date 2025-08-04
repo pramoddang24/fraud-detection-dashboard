@@ -11,7 +11,48 @@ from collections import deque
 import asyncio
 from fastapi.responses import HTMLResponse
 from starlette.websockets import WebSocketDisconnect
-from models_module import UCB1, ThompsonSampling  # Import the new module
+
+
+# --- Redefine the MAB classes here so joblib can find them ---
+class UCB1:
+    def __init__(self, n_arms, alpha=2.0):
+        self.n_arms = n_arms
+        self.alpha = alpha
+        self.counts = np.zeros(n_arms)
+        self.values = np.zeros(n_arms)
+        self.t = 0
+        self.cumulative_regret = 0.0
+
+    def select_arm(self):
+        self.t += 1
+        if self.t <= self.n_arms:
+            return self.t - 1
+        return np.argmax(self.values + np.sqrt(self.alpha * np.log(self.t) / (self.counts + 1e-6)))
+
+    def update(self, arm, reward, optimal_reward=1):
+        self.counts[arm] += 1
+        n = self.counts[arm]
+        self.values[arm] = ((n - 1) / n) * self.values[arm] + (1 / n) * reward
+        self.cumulative_regret += (optimal_reward - reward)
+
+
+class ThompsonSampling:
+    def __init__(self, n_arms):
+        self.n_arms = n_arms
+        self.alpha = np.ones(n_arms)
+        self.beta = np.ones(n_arms)
+        self.cumulative_regret = 0.0
+
+    def select_arm(self):
+        return np.argmax(np.random.beta(self.alpha, self.beta))
+
+    def update(self, arm, reward, optimal_reward=1):
+        if reward == 1:
+            self.alpha[arm] += 1
+        else:
+            self.beta[arm] += 1
+        self.cumulative_regret += (optimal_reward - reward)
+
 
 # --- Load Models and Data ---
 model_dir = "models"
@@ -81,7 +122,7 @@ def precision_at_k(window, k=100):
 
 
 async def stream_transactions():
-    global current_model, thompson_agent, ucb1_agent, logistic_regression
+    global current_model
     transaction_step = 0
     cluster_counts = {str(i): 0 for i in range(1, clusterer.n_clusters + 1)}
 
