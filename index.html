@@ -66,19 +66,19 @@
                                 <span>Dashboard Controls</span>
                             </h3>
                             <div class="flex space-x-2">
-                                <button id="start-btn" class="flex-1 bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg transition duration-300">Start Stream</button>
-                                <button id="stop-btn" class="flex-1 bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg transition duration-300">Stop Stream</button>
+                                <button id="start-btn" class="flex-1 bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded-lg transition duration-300" aria-label="Start streaming data">Start Stream</button>
+                                <button id="stop-btn" class="flex-1 bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg transition duration-300" aria-label="Stop streaming data">Stop Stream</button>
                             </div>
                             <div class="mt-4 flex items-center justify-center space-x-4">
                                 <label for="model-select" class="text-gray-400 font-semibold">Active Model:</label>
-                                <select id="model-select" class="bg-gray-700 text-gray-200 rounded-lg p-2 focus:ring-purple-500 focus:border-purple-500">
+                                <select id="model-select" class="bg-gray-700 text-gray-200 rounded-lg p-2 focus:ring-purple-500 focus:border-purple-500" aria-label="AI Model selection">
                                     <option value="thompson_sampling">Thompson Sampling</option>
                                     <option value="ucb1">UCB1</option>
                                     <option value="logistic_regression">Logistic Regression</option>
                                 </select>
                             </div>
                             <div class="mt-4 text-center">
-                                <span id="status-indicator" class="inline-flex items-center px-3 py-0.5 rounded-full text-sm font-medium bg-red-800 text-red-300">
+                                <span id="status-indicator" role="status" aria-live="polite" class="inline-flex items-center px-3 py-0.5 rounded-full text-sm font-medium bg-red-800 text-red-300">
                                     <svg class="-ml-1 mr-1.5 h-2 w-2 text-red-400" fill="currentColor" viewBox="0 0 8 8">
                                         <circle cx="4" cy="4" r="3" />
                                     </svg>
@@ -159,9 +159,9 @@
                             <h3 class="text-white font-bold mb-2 text-center">Precision@100 (TS vs. LR)</h3>
                             <canvas id="precisionChart" style="max-height: 200px;"></canvas>
                         </div>
-                        <div class="bg-gray-800/80 p-4 rounded-lg ring-1 ring-gray-700">
+                        <div class="bg-gray-800/80 p-4 rounded-lg ring-1 ring-gray-700" style="height: 220px;">
                             <h3 class="text-white font-bold mb-2 text-center">Live Cluster Distribution (GMM)</h3>
-                            <canvas id="clusterChart" style="max-height: 200px;"></canvas>
+                            <canvas id="clusterChart"></canvas>
                         </div>
                     </div>
                 </div>
@@ -321,6 +321,7 @@
                 precisionChart.data.datasets[0].data = [0, 0];
                 precisionChart.update('none');
 
+                clusterChart.data.labels = [];
                 clusterChart.data.datasets[0].data = [];
                 clusterChart.update('none');
             }
@@ -359,6 +360,7 @@
                 const clusterCounts = data.cluster_distribution;
 
                 totalTxns++;
+                step++;
 
                 const isFraud = prediction.is_fraud;
                 const statusClass = isFraud ? 'text-red-400 font-bold' : 'text-green-400';
@@ -391,7 +393,7 @@
                             </p>
                             <p class="text-xs text-gray-400">Model: ${prediction.model_name}, Prob: ${prediction.probability.toFixed(4)}</p>
                         </div>
-                        <button class="dismiss-btn px-2 py-1 bg-red-600 hover:bg-red-700 text-white text-xs rounded-full">Dismiss</button>
+                        <button class="dismiss-btn px-2 py-1 bg-red-600 hover:bg-red-700 text-white text-xs rounded-full" aria-label="Dismiss alert">Dismiss</button>
                     `;
                     alertFeed.prepend(alertItem);
 
@@ -435,8 +437,11 @@
                 }
 
                 // Update Cluster Distribution Plot
-                clusterChart.data.datasets[0].data = Object.values(clusterCounts);
-                clusterChart.update('none');
+                if (data.cluster_distribution) {
+                    clusterChart.data.labels = Object.keys(data.cluster_distribution).map(key => `Cluster ${key}`);
+                    clusterChart.data.datasets[0].data = Object.values(data.cluster_distribution);
+                    clusterChart.update('none');
+                }
             });
         });
     </script>

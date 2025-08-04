@@ -143,6 +143,7 @@ def background_stream():
         transaction_class = int(transaction_data['Class'])
         transaction_id = transaction_data.get('id', transaction_step)
 
+        # Make predictions for ALL models to update their state
         ts_arm = thompson_agent.select_arm()
         thompson_agent.update(ts_arm, transaction_class)
         ts_prob = thompson_agent.alpha[ts_arm] / (thompson_agent.alpha[ts_arm] + thompson_agent.beta[ts_arm])
