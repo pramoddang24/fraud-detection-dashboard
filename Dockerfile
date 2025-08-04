@@ -4,8 +4,11 @@ FROM python:3.11-slim AS builder
 WORKDIR /app
 
 COPY requirements.txt .
-RUN pip install --upgrade pip setuptools wheel \
- && pip install -r requirements.txt
+
+# ✅ FIX: Explicitly upgrade setuptools to a version that satisfies dependencies.
+RUN pip install --upgrade pip wheel && \
+    pip install --upgrade "setuptools>=75.8.2" && \
+    pip install -r requirements.txt
 
 # —— Stage 2: build final image ——
 FROM python:3.11-slim
@@ -17,7 +20,6 @@ COPY --from=builder /usr/local/bin /usr/local/bin
 
 COPY . .
 
-EXPOSE 8000
+EXPOSE 8080
 
-# ✅ FIX: Using sh -c to enable port fallback/default behavior correctly
-CMD sh -c "gunicorn app:app --worker-class geventwebsocket.gunicorn.workers.GeventWebSocketWorker --bind 0.0.0.0:${PORT:-8000}"
+CMD sh -c "gunicorn app:app --worker-class geventwebsocket.gunicorn.workers.GeventWebSocketWorker --bind 0.0.0.0:${PORT:-8080}"
