@@ -5,55 +5,13 @@ import joblib
 import pandas as pd
 import numpy as np
 from fastapi import FastAPI, WebSocket
-from threading import Thread, Event
+from threading import Event
 import random
 from collections import deque
 import asyncio
 from fastapi.responses import HTMLResponse
 from starlette.websockets import WebSocketDisconnect
-
-
-# Mocking the MAB classes from your ipynb, which are required for unpickling
-# the .pkl model files correctly.
-class UCB1:
-    def __init__(self, n_arms, alpha=2.0):
-        self.n_arms = n_arms
-        self.alpha = alpha
-        self.counts = np.zeros(n_arms)
-        self.values = np.zeros(n_arms)
-        self.t = 0
-        self.cumulative_regret = 0.0
-
-    def select_arm(self):
-        self.t += 1
-        if self.t <= self.n_arms:
-            return self.t - 1
-        return np.argmax(self.values + np.sqrt(self.alpha * np.log(self.t) / (self.counts + 1e-6)))
-
-    def update(self, arm, reward, optimal_reward=1):
-        self.counts[arm] += 1
-        n = self.counts[arm]
-        self.values[arm] = ((n - 1) / n) * self.values[arm] + (1 / n) * reward
-        self.cumulative_regret += (optimal_reward - reward)
-
-
-class ThompsonSampling:
-    def __init__(self, n_arms):
-        self.n_arms = n_arms
-        self.alpha = np.ones(n_arms)
-        self.beta = np.ones(n_arms)
-        self.cumulative_regret = 0.0
-
-    def select_arm(self):
-        return np.argmax(np.random.beta(self.alpha, self.beta))
-
-    def update(self, arm, reward, optimal_reward=1):
-        if reward == 1:
-            self.alpha[arm] += 1
-        else:
-            self.beta[arm] += 1
-        self.cumulative_regret += (optimal_reward - reward)
-
+from models_module import UCB1, ThompsonSampling  # Import the new module
 
 # --- Load Models and Data ---
 model_dir = "models"
@@ -107,7 +65,6 @@ except FileNotFoundError:
 
 # --- FastAPI and WebSocket setup ---
 app = FastAPI()
-# Store all active WebSocket connections
 websocket_connections = set()
 streaming_task = None
 current_model = "thompson_sampling"
@@ -123,7 +80,6 @@ def precision_at_k(window, k=100):
     return true_positives / k if k > 0 else 0.0
 
 
-# --- Streaming function for FastAPI ---
 async def stream_transactions():
     global current_model
     transaction_step = 0
@@ -141,7 +97,6 @@ async def stream_transactions():
         transaction_class = int(transaction_data['Class'])
         transaction_id = transaction_data.get('id', transaction_step)
 
-        # Make predictions for ALL models to update their state
         ts_arm = thompson_agent.select_arm()
         thompson_agent.update(ts_arm, transaction_class)
         ts_prob = thompson_agent.alpha[ts_arm] / (thompson_agent.alpha[ts_arm] + thompson_agent.beta[ts_arm])
@@ -153,7 +108,6 @@ async def stream_transactions():
         lr_features = np.append(transaction_features, transaction_data['arm_id']).reshape(1, -1)
         lr_prob = logistic_regression.predict_proba(lr_features)[0][1]
 
-        # Update Precision@100 sliding window
         sliding_window.append({
             'ts_prob': ts_prob,
             'lr_prob': lr_prob,
@@ -177,7 +131,6 @@ async def stream_transactions():
             model_name = "Logistic Regression"
             probability = lr_prob
 
-        # Update cluster distribution counts
         if str(cluster_id) in cluster_counts:
             cluster_counts[str(cluster_id)] += 1
         else:
@@ -216,7 +169,6 @@ async def stream_transactions():
             }
         }
 
-        # Broadcast the message to all connected clients
         for connection in websocket_connections:
             await connection.send_json(data_to_emit)
 
@@ -253,6 +205,7 @@ async def websocket_endpoint(websocket: WebSocket):
                     streaming_task = None
                 await websocket.send_json({"status": "stopped"})
             elif data['action'] == 'set_model':
+                global current_model
                 current_model = data['model']
                 await websocket.send_json({"status": f"model set to {current_model}"})
     except WebSocketDisconnect:
