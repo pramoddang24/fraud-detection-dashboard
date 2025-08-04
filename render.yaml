@@ -2,7 +2,7 @@ services:
   - name: backend
     type: web
     env: python
-    # runtime will be read from runtime.txt
+    # runtime read from runtime.txt
     buildCommand: |
       pip install --upgrade pip setuptools wheel
       pip install -r requirements.txt
