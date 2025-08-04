@@ -108,7 +108,7 @@ except FileNotFoundError:
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'secret!'
 # Change 'gevent' to 'eventlet' for compatibility with Render.com
-socketio = SocketIO(app, async_mode='eventlet', cors_allowed_origins='*')
+socketio = SocketIO(app, async_mode='gevent', cors_allowed_origins='*')
 
 # Threading for simulation
 thread = None
