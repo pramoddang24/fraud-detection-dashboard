@@ -1,19 +1,15 @@
-FROM python:3.11-slim AS builder
+FROM python:3.11-slim
 
 WORKDIR /app
 
 COPY requirements.txt .
 
-RUN pip install --upgrade pip wheel \
- && pip install "setuptools>=76.0.0" \
- && pip install -r requirements.txt
+# Install pip + setuptools upgrade first
+RUN pip install --no-cache-dir --upgrade pip wheel \
+ && pip install --no-cache-dir "setuptools>=76.0.0"
 
-FROM python:3.11-slim
-
-WORKDIR /app
-
-COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
-COPY --from=builder /usr/local/bin /usr/local/bin
+# Install the rest (with no cache to avoid hidden downgrades)
+RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
