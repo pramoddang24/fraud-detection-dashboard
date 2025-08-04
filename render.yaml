@@ -1,9 +1,0 @@
-services:
-  - name: backend
-    type: web
-    env: python
-    runtime: python-3.11.6        # <— force 3.11
-    buildCommand: |
-      pip install --upgrade pip setuptools wheel
-      pip install -r requirements.txt
-    startCommand: gunicorn backend.app:app
