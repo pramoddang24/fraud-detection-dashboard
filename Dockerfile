@@ -3,7 +3,6 @@ FROM python:3.11-slim AS builder
 
 WORKDIR /app
 
-# Copy requirements and install all packages (wheels only)
 COPY requirements.txt .
 RUN pip install --upgrade pip setuptools wheel \
  && pip install -r requirements.txt
@@ -13,14 +12,12 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Copy installed packages and executables from builder
 COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
 COPY --from=builder /usr/local/bin /usr/local/bin
 
-# Copy your application code and models
 COPY . .
 
 EXPOSE 8000
 
-# Launch the app with Gunicorn
-CMD ["sh", "-c", "PORT=${PORT:-8000} && gunicorn backend.app:app --worker-class geventwebsocket.gunicorn.workers.GeventWebSocketWorker --bind 0.0.0.0:$PORT"]
+# ✅ FIX: Using sh -c to enable port fallback/default behavior correctly
+CMD sh -c "gunicorn app:app --worker-class geventwebsocket.gunicorn.workers.GeventWebSocketWorker --bind 0.0.0.0:${PORT:-8000}"
