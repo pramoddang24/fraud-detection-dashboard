@@ -129,7 +129,8 @@ def precision_at_k(window, k=100):
 def background_stream():
     global current_model
     transaction_step = 0
-    cluster_counts = {str(i): 0 for i in range(1, clusterer.n_clusters + 1)}
+    # Correctly initialize cluster_counts
+    cluster_counts = {str(i): 0 for i in range(clusterer.n_components)}
 
     while not thread_stop_event.is_set():
         if transaction_step >= len(shuffled_df):
@@ -142,6 +143,9 @@ def background_stream():
         transaction_features = transaction_data[features].values.reshape(1, -1)
         transaction_class = int(transaction_data['Class'])
         transaction_id = transaction_data.get('id', transaction_step)
+
+        # *** BUG FIX: Predict cluster_id before using it ***
+        cluster_id = clusterer.predict(preprocessor.transform(transaction_features))[0]
 
         # Make predictions for ALL models to update their state
         ts_arm = thompson_agent.select_arm()
@@ -205,7 +209,7 @@ def background_stream():
                 'is_fraud': is_fraud,
                 'model_name': model_name,
                 'probability': probability,
-                'cluster_id': cluster_id
+                'cluster_id': int(cluster_id)  # Ensure cluster_id is JSON serializable
             },
             'mab_performance': {
                 'ts_regret': thompson_agent.cumulative_regret,
