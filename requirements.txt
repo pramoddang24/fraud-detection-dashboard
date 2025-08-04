@@ -1,6 +1,7 @@
 fastapi
 uvicorn
 joblib
+flask
 pandas
 numpy
 scikit-learn
