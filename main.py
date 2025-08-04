@@ -216,3 +216,4 @@ async def websocket_endpoint(websocket: WebSocket):
     except Exception as e:
         print(f"An error occurred: {e}")
         websocket_connections.remove(websocket)
+
