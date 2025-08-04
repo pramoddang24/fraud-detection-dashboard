@@ -5,7 +5,7 @@ WORKDIR /app
 
 COPY requirements.txt .
 
-# ✅ FIX: Explicitly upgrade setuptools to a version that satisfies dependencies.
+# ✅ FIX: Explicitly upgrade setuptools to a version that satisfies all sub-dependencies.
 RUN pip install --upgrade pip wheel && \
     pip install --upgrade "setuptools>=75.8.2" && \
     pip install -r requirements.txt
