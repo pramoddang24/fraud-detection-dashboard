@@ -11,8 +11,7 @@ import random
 from collections import deque
 
 
-# Mocking the MAB classes from your ipynb, which are required for unpickling
-# the .pkl model files correctly.
+# --- Redefine the MAB classes here so joblib can find them ---
 class UCB1:
     def __init__(self, n_arms, alpha=2.0):
         self.n_arms = n_arms
@@ -56,11 +55,14 @@ class ThompsonSampling:
 # --- Load Models and Data ---
 model_dir = "models"
 try:
+    # We must explicitly redefine the classes before loading the pickled objects
+    # to avoid the "Can't get attribute" error.
+    ucb1_agent = joblib.load(os.path.join(model_dir, "ucb1_agent.pkl"))
+    thompson_agent = joblib.load(os.path.join(model_dir, "thompson_agent.pkl"))
     preprocessor = joblib.load(os.path.join(model_dir, "preprocessor.pkl"))
     clusterer = joblib.load(os.path.join(model_dir, "cluster_model.pkl"))
     logistic_regression = joblib.load(os.path.join(model_dir, "logistic_regression.pkl"))
-    ucb1_agent = joblib.load(os.path.join(model_dir, "ucb1_agent.pkl"))
-    thompson_agent = joblib.load(os.path.join(model_dir, "thompson_agent.pkl"))
+
     with open(os.path.join(model_dir, "arm_map.json")) as f:
         arm_map_data = json.load(f)
     print("Models loaded successfully.")
@@ -143,6 +145,7 @@ def background_stream():
         transaction_class = int(transaction_data['Class'])
         transaction_id = transaction_data.get('id', transaction_step)
 
+        # Make predictions for ALL models to update their state
         ts_arm = thompson_agent.select_arm()
         thompson_agent.update(ts_arm, transaction_class)
         ts_prob = thompson_agent.alpha[ts_arm] / (thompson_agent.alpha[ts_arm] + thompson_agent.beta[ts_arm])
@@ -151,15 +154,18 @@ def background_stream():
         ucb1_agent.update(ucb_arm, transaction_class)
         ucb_prob = ucb1_agent.values[ucb_arm]
 
+        # Note: The Logistic Regression model was trained on `features + ['arm_id']`
         lr_features = np.append(transaction_features, transaction_data['arm_id']).reshape(1, -1)
         lr_prob = logistic_regression.predict_proba(lr_features)[0][1]
 
+        # Update Precision@100 sliding window
         sliding_window.append({
             'ts_prob': ts_prob,
             'lr_prob': lr_prob,
             'is_fraud': transaction_class
         })
 
+        # Determine the prediction for the active model to display in the feed
         is_fraud = False
         model_name = ""
         probability = 0.0
@@ -177,11 +183,10 @@ def background_stream():
             model_name = "Logistic Regression"
             probability = lr_prob
 
-        if str(cluster_id) in cluster_counts:
-            cluster_counts[str(cluster_id)] += 1
-        else:
-            cluster_counts[str(cluster_id)] = 1
+        # Update cluster distribution counts
+        cluster_counts[str(cluster_id)] = cluster_counts.get(str(cluster_id), 0) + 1
 
+        # Calculate real-time Precision@100 from the sliding window
         ts_probs_window = [item['ts_prob'] for item in sliding_window]
         lr_probs_window = [item['lr_prob'] for item in sliding_window]
         true_labels_window = [item['is_fraud'] for item in sliding_window]
@@ -215,8 +220,7 @@ def background_stream():
             }
         }
 
-        for connection in websocket_connections:
-            emit('streaming_data', data_to_emit, room=connection.sid)  # Use rooms for a single user
+        socketio.emit('streaming_data', data_to_emit, broadcast=True)
 
         transaction_step += 1
         time.sleep(0.5)
@@ -250,7 +254,7 @@ def start_streaming(data):
         thread = Thread(target=background_stream)
         thread.daemon = True
         thread.start()
-        emit('status', 'running', room=request.sid)
+        emit('status', 'running')
 
 
 @socketio.on('stop_streaming')
@@ -260,7 +264,7 @@ def stop_streaming():
     print('Received stop_streaming event.')
     if thread is not None and thread.is_alive():
         thread_stop_event.set()
-        emit('status', 'stopped', room=request.sid)
+        emit('status', 'stopped')
 
 
 @socketio.on('set_model')
