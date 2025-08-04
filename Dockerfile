@@ -4,12 +4,9 @@ WORKDIR /app
 
 COPY requirements.txt .
 
-# Force upgraded pip + setuptools first
 RUN pip install --no-cache-dir --upgrade pip wheel \
- && pip install --no-cache-dir "setuptools>=76.0.0"
-
-# Now install the rest
-RUN pip install --no-cache-dir -r requirements.txt
+ && pip install --no-cache-dir "setuptools>=76.0.0" \
+ && pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
