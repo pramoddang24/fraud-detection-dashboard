@@ -4,9 +4,11 @@ __pycache__/
 .git
 .gitignore
 
-# Exclude frontend build artifacts if you have one\ nfrontend/node_modules/
+# Exclude frontend build artifacts if you have one
+frontend/node_modules/
 frontend/dist/
 
-# IDE/project files\ n.env
+# IDE/project files
+.env
 .vscode/
 .idea/
