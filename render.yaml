@@ -2,13 +2,8 @@ services:
   - name: backend
     type: web
     env: python
-    # runtime read from runtime.txt
+    runtime: python-3.11.6        # <— force 3.11
     buildCommand: |
       pip install --upgrade pip setuptools wheel
-      # install numpy first so pip can resolve scikit-learn’s dependency
-      pip install numpy
-      # force scikit-learn to come from a wheel, not source
-      pip install scikit-learn==1.2.2 --only-binary=:all:
-      # now install the rest (no re-install of scikit-learn needed)
-      pip install -r requirements.txt --no-deps
+      pip install -r requirements.txt
     startCommand: gunicorn backend.app:app
