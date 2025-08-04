@@ -3,10 +3,10 @@ FROM python:3.11-slim AS builder
 
 WORKDIR /app
 
-# Copy only requirements first for better cache
+# Copy requirements and install all packages (wheels only)
 COPY requirements.txt .
 RUN pip install --upgrade pip setuptools wheel \
- && pip install -r requirements.txt --no-deps
+ && pip install -r requirements.txt
 
 # —— Stage 2: build final image ——
 FROM python:3.11-slim
@@ -23,4 +23,4 @@ COPY . .
 EXPOSE 8000
 
 # Launch the app with Gunicorn
-CMD ["gunicorn", "backend.app:app", "--bind", "0.0.0.0:8000"]
+CMD ["gunicorn", "backend.app:app", "--worker-class", "geventwebsocket.gunicorn.workers.GeventWebSocketWorker", "--bind", "0.0.0.0:8000"]
