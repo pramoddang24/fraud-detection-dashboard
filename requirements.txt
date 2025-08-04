@@ -11,15 +11,3 @@ Flask_SocketIO==5.3.0
 gevent-websocket==0.10.1
 # Add gunicorn so it's available in the container:
 gunicorn==20.1.0
-```text
-Flask==2.2.5
-scikit-learn==1.2.2
-pandas==1.5.3
-numpy==1.24.2
-joblib==1.2.0
-python-engineio==4.3.0
-# gevent with wheels for Python 3.11:
-gevent==22.10.2
-Flask_SocketIO==5.3.0
-# Add gunicorn so it's available in the container:
-gunicorn==20.1.0
