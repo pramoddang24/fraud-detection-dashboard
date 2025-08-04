@@ -81,7 +81,7 @@ def precision_at_k(window, k=100):
 
 
 async def stream_transactions():
-    global current_model
+    global current_model, thompson_agent, ucb1_agent, logistic_regression
     transaction_step = 0
     cluster_counts = {str(i): 0 for i in range(1, clusterer.n_clusters + 1)}
 
@@ -186,13 +186,13 @@ async def get_index():
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
+    global streaming_task, current_model, thread_stop_event
     await websocket.accept()
     websocket_connections.add(websocket)
     try:
         while True:
             data = await websocket.receive_json()
             if data['action'] == 'start_streaming':
-                global streaming_task, current_model
                 current_model = data['model']
                 if not streaming_task or streaming_task.done():
                     thread_stop_event.clear()
@@ -205,7 +205,6 @@ async def websocket_endpoint(websocket: WebSocket):
                     streaming_task = None
                 await websocket.send_json({"status": "stopped"})
             elif data['action'] == 'set_model':
-                global current_model
                 current_model = data['model']
                 await websocket.send_json({"status": f"model set to {current_model}"})
     except WebSocketDisconnect:
@@ -216,4 +215,3 @@ async def websocket_endpoint(websocket: WebSocket):
     except Exception as e:
         print(f"An error occurred: {e}")
         websocket_connections.remove(websocket)
-
