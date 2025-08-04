@@ -1,19 +1,26 @@
-# 1. Pick a Python base image that already has wheels for scikit-learn
-FROM python:3.11-slim
+# —— Stage 1: install dependencies ——
+FROM python:3.11-slim AS builder
 
-# 2. Set working directory
 WORKDIR /app
 
-# 3. Copy and install dependencies
+# Copy only requirements first for better cache
 COPY requirements.txt .
 RUN pip install --upgrade pip setuptools wheel \
  && pip install -r requirements.txt
 
-# 4. Copy your app code (and your models folder)
+# —— Stage 2: build final image ——
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Copy installed packages from builder
+COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
+COPY --from=builder /usr/local/bin /usr/local/bin
+
+# Copy your application code and models
 COPY . .
 
-# 5. Expose your port (if needed)
 EXPOSE 8000
 
-# 6. Launch with Gunicorn
+# Launch the app with Gunicorn
 CMD ["gunicorn", "backend.app:app", "--bind", "0.0.0.0:8000"]

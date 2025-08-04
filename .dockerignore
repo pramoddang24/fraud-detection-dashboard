@@ -1,0 +1,12 @@
+__pycache__/
+*.py[cod]
+*.log
+.git
+.gitignore
+
+# Exclude frontend build artifacts if you have one\ nfrontend/node_modules/
+frontend/dist/
+
+# IDE/project files\ n.env
+.vscode/
+.idea/
