@@ -4,16 +4,15 @@ import json
 import joblib
 import pandas as pd
 import numpy as np
-from fastapi import FastAPI, WebSocket
-from threading import Event
+from flask import Flask, send_from_directory, request
+from flask_socketio import SocketIO, emit
+from threading import Thread, Event
 import random
 from collections import deque
-import asyncio
-from fastapi.responses import HTMLResponse
-from starlette.websockets import WebSocketDisconnect
 
 
-# --- Redefine the MAB classes here so joblib can find them ---
+# Mocking the MAB classes from your ipynb, which are required for unpickling
+# the .pkl model files correctly.
 class UCB1:
     def __init__(self, n_arms, alpha=2.0):
         self.n_arms = n_arms
@@ -104,12 +103,17 @@ except FileNotFoundError:
     df['arm_id'] = df['arm_id'].astype(int)
     shuffled_df = df.sample(frac=1).reset_index(drop=True)
 
-# --- FastAPI and WebSocket setup ---
-app = FastAPI()
-websocket_connections = set()
-streaming_task = None
-current_model = "thompson_sampling"
+# --- Flask and SocketIO setup ---
+app = Flask(__name__)
+app.config['SECRET_KEY'] = 'secret!'
+socketio = SocketIO(app, async_mode='gevent', cors_allowed_origins='*')
+
+# Threading for simulation
+thread = None
 thread_stop_event = Event()
+current_model = "thompson_sampling"
+
+# Sliding window for Precision@100
 sliding_window = deque(maxlen=100)
 
 
@@ -121,7 +125,8 @@ def precision_at_k(window, k=100):
     return true_positives / k if k > 0 else 0.0
 
 
-async def stream_transactions():
+# --- Simulation function ---
+def background_stream():
     global current_model
     transaction_step = 0
     cluster_counts = {str(i): 0 for i in range(1, clusterer.n_clusters + 1)}
@@ -131,7 +136,7 @@ async def stream_transactions():
             print("End of simulation data. Looping.")
             transaction_step = 0
             shuffled_df = df.sample(frac=1).reset_index(drop=True)
-            await asyncio.sleep(2)
+            time.sleep(2)
 
         transaction_data = shuffled_df.iloc[transaction_step]
         transaction_features = transaction_data[features].values.reshape(1, -1)
@@ -211,48 +216,61 @@ async def stream_transactions():
         }
 
         for connection in websocket_connections:
-            await connection.send_json(data_to_emit)
+            emit('streaming_data', data_to_emit, room=connection.sid)  # Use rooms for a single user
 
         transaction_step += 1
-        await asyncio.sleep(0.5)
+        time.sleep(0.5)
 
 
-# --- FastAPI routes ---
-@app.get("/", response_class=HTMLResponse)
-async def get_index():
-    with open("index.html", "r") as f:
-        html_content = f.read()
-    return HTMLResponse(content=html_content, status_code=200)
+# --- Flask routes ---
+@app.route('/')
+def index():
+    return send_from_directory(os.getcwd(), 'index.html')
 
 
-@app.websocket("/ws")
-async def websocket_endpoint(websocket: WebSocket):
-    global streaming_task, current_model, thread_stop_event
-    await websocket.accept()
-    websocket_connections.add(websocket)
-    try:
-        while True:
-            data = await websocket.receive_json()
-            if data['action'] == 'start_streaming':
-                current_model = data['model']
-                if not streaming_task or streaming_task.done():
-                    thread_stop_event.clear()
-                    streaming_task = asyncio.create_task(stream_transactions())
-                    await websocket.send_json({"status": "running"})
-            elif data['action'] == 'stop_streaming':
-                thread_stop_event.set()
-                if streaming_task:
-                    streaming_task.cancel()
-                    streaming_task = None
-                await websocket.send_json({"status": "stopped"})
-            elif data['action'] == 'set_model':
-                current_model = data['model']
-                await websocket.send_json({"status": f"model set to {current_model}"})
-    except WebSocketDisconnect:
-        websocket_connections.remove(websocket)
-        print("Client disconnected")
-    except asyncio.CancelledError:
-        print("Streaming task cancelled")
-    except Exception as e:
-        print(f"An error occurred: {e}")
-        websocket_connections.remove(websocket)
+# --- SocketIO events ---
+@socketio.on('connect')
+def test_connect():
+    print('Client connected')
+
+
+@socketio.on('disconnect')
+def test_disconnect():
+    print('Client disconnected')
+
+
+@socketio.on('start_streaming')
+def start_streaming(data):
+    """Starts the background thread for data streaming."""
+    global thread, current_model
+    print('Received start_streaming event.')
+    current_model = data['model']
+    if thread is None or not thread.is_alive():
+        thread_stop_event.clear()
+        thread = Thread(target=background_stream)
+        thread.daemon = True
+        thread.start()
+        emit('status', 'running', room=request.sid)
+
+
+@socketio.on('stop_streaming')
+def stop_streaming():
+    """Stops the background thread for data streaming."""
+    global thread
+    print('Received stop_streaming event.')
+    if thread is not None and thread.is_alive():
+        thread_stop_event.set()
+        emit('status', 'stopped', room=request.sid)
+
+
+@socketio.on('set_model')
+def set_model(data):
+    """Updates the model used for real-time predictions."""
+    global current_model
+    current_model = data['model']
+    print(f"Active model set to: {current_model}")
+
+
+if __name__ == '__main__':
+    port = int(os.environ.get('PORT', 8080))
+    socketio.run(app, debug=False, host='0.0.0.0', port=port)
