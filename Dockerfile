@@ -4,7 +4,6 @@ WORKDIR /app
 
 COPY requirements.txt .
 
-# Upgrade setuptools FIRST and install all dependencies
 RUN pip install --no-cache-dir --upgrade pip wheel \
  && pip install --no-cache-dir "setuptools>=76.0.0" \
  && pip install --no-cache-dir -r requirements.txt
@@ -13,5 +12,5 @@ COPY . .
 
 EXPOSE 8080
 
-# Correct: Use CMD as a string so shell expands ${PORT}
-CMD gunicorn --worker-class geventwebsocket.gunicorn.workers.GeventWebSocketWorker -w 1 --bind 0.0.0.0:${PORT:-8080} app:app
+# The critical line—use CMD in shell form or as an array with sh -c:
+CMD ["sh", "-c", "gunicorn --worker-class geventwebsocket.gunicorn.workers.GeventWebSocketWorker -w 1 --bind 0.0.0.0:${PORT:-8080} app:app"]
