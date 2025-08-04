@@ -15,9 +15,11 @@ WORKDIR /app
 COPY --from=builder /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
 COPY --from=builder /usr/local/bin /usr/local/bin
 
+# ... (rest of the file is the same) ...
+
 COPY . .
 
-EXPOSE 8000
+EXPOSE 8080
 
 # ✅ FIX: Using sh -c to enable port fallback/default behavior correctly
-CMD sh -c "gunicorn app:app --worker-class geventwebsocket.gunicorn.workers.GeventWebSocketWorker --bind 0.0.0.0:${PORT:-8000}"
+CMD sh -c "gunicorn app:app --worker-class geventwebsocket.gunicorn.workers.GeventWebSocketWorker --bind 0.0.0.0:${PORT:-8080}"
