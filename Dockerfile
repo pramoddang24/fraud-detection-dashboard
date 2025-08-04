@@ -16,4 +16,5 @@ EXPOSE 8000
 
 # Use eventlet worker (as Flask-SocketIO officially recommends)
 ENTRYPOINT ["sh", "-c"]
-CMD ["exec gunicorn app:app -k eventlet -w 1 --bind 0.0.0.0:${PORT:-8000}"]
+CMD gunicorn --worker-class geventwebsocket.gunicorn.workers.GeventWebSocketWorker -w 1 --bind 0.0.0.0:$PORT app:app
+
