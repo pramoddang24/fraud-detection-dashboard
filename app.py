@@ -104,9 +104,11 @@ except FileNotFoundError:
     shuffled_df = df.sample(frac=1).reset_index(drop=True)
 
 # --- Flask and SocketIO setup ---
+# --- Flask and SocketIO setup ---
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'secret!'
-socketio = SocketIO(app, async_mode='gevent', cors_allowed_origins='*')
+# Change 'gevent' to 'eventlet' for compatibility with Render.com
+socketio = SocketIO(app, async_mode='eventlet', cors_allowed_origins='*')
 
 # Threading for simulation
 thread = None
